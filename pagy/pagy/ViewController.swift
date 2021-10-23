@@ -12,60 +12,27 @@ class ViewController: UIViewController {
     
     @IBOutlet var table:UITableView!
     
-    final let blankView = UIView()
-    
     // pagingを管理している
-    final let pagyController = Presenter<User>()
+    final let presenter = Presenter<User>()
     
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
 
-        // scroll下端まで行ったとき呼ばれる
-        pagyController.pagingCallBack = { [weak self] completion in
-            guard let page = self?.pagyController.page else { return }
-            
-            // data取得処理
-            // 疑似apiとして1秒後にデータを取得 & merge
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                
-                // 4ページ目以降はpage終了のため読み込まない
-                let fetchedList = page > 3 ? [] : [User](repeating: User(name: "airy", age: 24), count: 25)
-                
-                // 文字通り実質の無限スクロールならこのifはいらない。load後に操作しないとスペース残るし。。
-                if fetchedList.isEmpty {
-                    self?.table.tableFooterView = self?.blankView
-                }
-                
-                completion(fetchedList, false)
-            }
-        }
-        
-        // scroll上端でpullしたとき呼ばれる
-        pagyController.refreshCallback = { [weak self] completion in
-            // page refresh処理
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                let fetchedList = [User](repeating: User(name: "someone", age: 100), count: 25)
-                completion(fetchedList)
-                
-                self?.table.tableFooterView = self?.pagyController.spinner
-            }
-        }
-        
         // 一定期間でリフレッシュしたい
-        pagyController.lifetime = 6 * 60 * 60 // 6時間毎に自動でrefresh
+        presenter.lifetime = 6 * 60 * 60 // 6時間毎に自動でrefresh
     }
     
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // paging周りの処理を委譲
-        table.delegate = pagyController
+        table.delegate = presenter
         // loadingのUI設定
-        table.tableFooterView = pagyController.spinner
-        table.refreshControl = pagyController.refreshCtl
+        table.tableFooterView = presenter.spinner
+        table.refreshControl = presenter.refreshCtl
         
-        pagyController.reloadData = table.reloadData
+        presenter.reloadData = table.reloadData
     }
 }
 
@@ -103,6 +70,30 @@ class Presenter<T>: PagyController<T>, UITableViewDelegate {
     
     override init() {
         super.init()
+        
+        // scroll下端まで行ったとき呼ばれる
+        pagingCallBack = { [weak self] completion in
+            guard let page = self?.page else { return }
+            
+            // data取得処理
+            // 疑似apiとして1秒後にデータを取得 & merge
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                
+                // 4ページ目以降はpage終了のため読み込まない
+                let fetchedList = page > 3 ? [] : [User](repeating: User(name: "airy", age: 24), count: 25) as! [T]
+                
+                completion(fetchedList, false)
+            }
+        }
+        
+        // scroll上端でpullしたとき呼ばれる
+        refreshCallback = { completion in
+            // page refresh処理
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let fetchedList = [User](repeating: User(name: "someone", age: 100), count: 25) as! [T]
+                completion(fetchedList)
+            }
+        }
         
         // repositoryからとってきてる想定で読んで♡
         // api requestで外部からデータを取得してくる
